@@ -5,7 +5,7 @@ import numpy_financial as npf
 import math
 
 # [설정] 페이지 기본
-st.set_page_config(page_title="신규배관 경제성 분석 Simulation ver2", layout="wide")
+st.set_page_config(page_title="신규배관 경제성 분석 Simulation ver3", layout="wide")
 
 # [함수] 금융 계산 로직
 def manual_npv(rate, values):
@@ -118,7 +118,7 @@ gas_rates = {
 # --------------------------------------------------------------------------
 # [UI] 메인 화면 최상단 (가스 용도 선택)
 # --------------------------------------------------------------------------
-st.title("🏗️ 신규배관 경제성 분석 Simulation ver2")
+st.title("🏗️ 신규배관 경제성 분석 Simulation ver3")
 
 st.subheader("📌 가스 용도 및 요금 선택")
 st.markdown("분석할 가스 용도 그룹을 먼저 선택하신 후, 하단에서 세부 용도를 선택해 주세요.")
