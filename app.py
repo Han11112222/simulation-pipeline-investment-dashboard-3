@@ -5,7 +5,7 @@ import numpy_financial as npf
 import math
 
 # [설정] 페이지 기본
-st.set_page_config(page_title="신규배관 경제성 분석 Simulation ver3", layout="wide")
+st.set_page_config(page_title="신규배관 경제성 분석 Simulation ver2", layout="wide")
 
 # [함수] 금융 계산 로직
 def manual_npv(rate, values):
@@ -118,7 +118,7 @@ gas_rates = {
 # --------------------------------------------------------------------------
 # [UI] 메인 화면 최상단 (가스 용도 선택)
 # --------------------------------------------------------------------------
-st.title("🏗️ 신규배관 경제성 분석 Simulation ver3")
+st.title("🏗️ 신규배관 경제성 분석 Simulation ver2")
 
 st.subheader("📌 가스 용도 및 요금 선택")
 st.markdown("분석할 가스 용도 그룹을 먼저 선택하신 후, 하단에서 세부 용도를 선택해 주세요.")
@@ -181,7 +181,6 @@ with col1:
     sim_len = st.number_input("투자 길이 (m)", value=0.0, step=1.0)
     sim_inv = st.number_input("총 공사비 (원)", value=0, format="%d")
     
-    # [수정포인트 1] 계량기 등급 입력을 디폴트로, 수기 입력을 토글로 변경
     use_manual_contrib = st.toggle("🔄 시설 분담금 수기 입력", value=False)
     
     if not use_manual_contrib:
@@ -213,7 +212,6 @@ with col1:
         op_hours = op_hours_data[est_product][est_usage]
         st.caption(f"ℹ️ 참고 연간 가동시간: **{op_hours} 시간**")
         
-        # [수정포인트 2] 현재 입력된 계량기 등급과 연동하여 예상 판매량 텍스트 출력
         if current_meter_grade > 0:
             st.success(f"👉 **우측 '연간 판매량'에 예상치({current_meter_grade}등급 × {op_hours}시간)가 자동 기입되었습니다.**")
             
@@ -224,7 +222,6 @@ with col2:
     
     use_m3 = st.toggle("🔄 단위 환산 (㎥ 입력 활성화)", value=True)
     
-    # [수정포인트 3] 추정기 활성화 시 '계량기 등급 * 연가동시간'으로 연간 판매량 자동 세팅
     default_vol_m3 = float(current_meter_grade * op_hours) if use_meter_estimator else 0.0
     
     if use_m3:
@@ -289,10 +286,29 @@ if st.session_state.run_sim:
                                    sim_jeon, sim_basic_rev, RATE, TAX, dep_period, active_period, c_maint, c_adm_jeon, c_adm_m,
                                    effective_sales_price, effective_purchase_price)
         
-        if use_meter_estimator:
-            req_vol_m3_30_est = res['required_vol_30'] / 42.563
-            est_meter_grade = req_vol_m3_30_est / op_hours if op_hours > 0 else 0
-            meter_est_placeholder.info(f"✨ 30년 경제성 만족 최소 계량기: **{math.ceil(est_meter_grade)} 등급** 이상 필요")
+        # [핵심 수정] 절대 손익분기점(Break-Even) 등급을 역산하는 무한 시뮬레이션 엔진 탑재
+        if use_meter_estimator and op_hours > 0:
+            exact_grade = 0
+            for g in range(1, 10001):  # 1등급부터 10000등급까지 가상 테스트
+                test_contrib = int(g * 22730)
+                test_vol_m3 = float(g * op_hours)
+                test_vol_mj = test_vol_m3 * 42.563
+                test_rev = int(test_vol_mj * effective_sales_price)
+                test_cost = int(test_vol_mj * effective_purchase_price)
+                
+                test_res = calculate_simulation(sim_len, sim_inv, test_contrib, sim_other, test_vol_mj, test_rev, test_cost, 
+                                                sim_jeon, sim_basic_rev, RATE, TAX, dep_period, 30, c_maint, c_adm_jeon, c_adm_m,
+                                                effective_sales_price, effective_purchase_price)
+                
+                # NPV가 0이 넘는 흑자 전환점을 찾는 순간 스톱!
+                if test_res['npv_30'] >= 0:
+                    exact_grade = g
+                    break
+            
+            if exact_grade > 0:
+                meter_est_placeholder.success(f"✨ 30년 경제성 만족 절대 최소 계량기: **{exact_grade} 등급** 이상 필요")
+            else:
+                meter_est_placeholder.error("✨ 30년 경제성 만족 최소 계량기: 산출 불가 (초기 공사비 과대 또는 마진 부족)")
             
         with result_top_container:
             st.divider()
