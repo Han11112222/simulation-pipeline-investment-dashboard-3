@@ -181,46 +181,42 @@ with col1:
     sim_len = st.number_input("투자 길이 (m)", value=0.0, step=1.0)
     sim_inv = st.number_input("총 공사비 (원)", value=0, format="%d")
     
-    # 시설 분담금 자동 계산 토글
-    use_meter_contrib = st.toggle("🔄 계량기 등급으로 시설 분담금 계산", value=False)
-    if use_meter_contrib:
+    # [수정포인트 1] 계량기 등급 입력을 디폴트로, 수기 입력을 토글로 변경
+    use_manual_contrib = st.toggle("🔄 시설 분담금 수기 입력", value=False)
+    
+    if not use_manual_contrib:
         meter_grade_input = st.number_input("계량기 등급 입력", value=0.0, step=1.0)
         sim_contrib = int(meter_grade_input * 22730)
         st.info(f"계산된 시설 분담금: **{sim_contrib:,.0f} 원** (등급 × 22,730원)")
+        current_meter_grade = meter_grade_input
     else:
         sim_contrib = st.number_input("시설 분담금 (원)", value=0, format="%d")
+        current_meter_grade = sim_contrib / 22730 if sim_contrib > 0 else 0.0
         
     sim_other = st.number_input("기타 이익 (보조금, 원)", value=0, format="%d")
     sim_jeon = st.number_input("공급 전수 (전)", value=0, step=1)
     
-    # [수정] 엑셀 데이터 추출 후 완벽 반영된 최소 계량기 등급 추정기
     st.markdown("---")
     use_meter_estimator = st.toggle("💡 최소 계량기 등급 추정", value=False)
+    
+    op_hours = 0
     if use_meter_estimator:
-        st.markdown("**[최소 계량기 추정기]**")
+        st.markdown("**[최소 계량기 추정기 및 판매량 연동]**")
         est_product = st.selectbox("상품 선택", ["난방", "냉난방", "일반"])
-        
-        # 엑셀 시트 분석 바탕으로 8가지 정확한 업종 카테고리로 세팅
         est_usage = st.selectbox("용도 및 업종", ["업무빌딩", "교육시설", "판매시설", "의료기관", "종교시설", "목욕시설", "숙박시설", "영업용"])
         
-        # 실제 엑셀 데이터 추출 값 맵핑 (목욕/숙박/영업용은 상품 무관 단일 연가동시간 적용)
         op_hours_data = {
-            "난방": {
-                "업무빌딩": 240, "교육시설": 222, "판매시설": 298, "의료기관": 543, "종교시설": 230,
-                "목욕시설": 659, "숙박시설": 721, "영업용": 582
-            },
-            "냉난방": {
-                "업무빌딩": 520, "교육시설": 523, "판매시설": 536, "의료기관": 960, "종교시설": 390,
-                "목욕시설": 659, "숙박시설": 721, "영업용": 582
-            },
-            "일반": {
-                "업무빌딩": 411, "교육시설": 335, "판매시설": 441, "의료기관": 500, "종교시설": 136,
-                "목욕시설": 659, "숙박시설": 721, "영업용": 582
-            }
+            "난방": {"업무빌딩": 240, "교육시설": 222, "판매시설": 298, "의료기관": 543, "종교시설": 230, "목욕시설": 659, "숙박시설": 721, "영업용": 582},
+            "냉난방": {"업무빌딩": 520, "교육시설": 523, "판매시설": 536, "의료기관": 960, "종교시설": 390, "목욕시설": 659, "숙박시설": 721, "영업용": 582},
+            "일반": {"업무빌딩": 411, "교육시설": 335, "판매시설": 441, "의료기관": 500, "종교시설": 136, "목욕시설": 659, "숙박시설": 721, "영업용": 582}
         }
         op_hours = op_hours_data[est_product][est_usage]
         st.caption(f"ℹ️ 참고 연간 가동시간: **{op_hours} 시간**")
         
+        # [수정포인트 2] 현재 입력된 계량기 등급과 연동하여 예상 판매량 텍스트 출력
+        if current_meter_grade > 0:
+            st.success(f"👉 **우측 '연간 판매량'에 예상치({current_meter_grade}등급 × {op_hours}시간)가 자동 기입되었습니다.**")
+            
         meter_est_placeholder = st.empty()
 
 with col2:
@@ -228,12 +224,16 @@ with col2:
     
     use_m3 = st.toggle("🔄 단위 환산 (㎥ 입력 활성화)", value=True)
     
+    # [수정포인트 3] 추정기 활성화 시 '계량기 등급 * 연가동시간'으로 연간 판매량 자동 세팅
+    default_vol_m3 = float(current_meter_grade * op_hours) if use_meter_estimator else 0.0
+    
     if use_m3:
-        input_vol = st.number_input("연간 판매량 (㎥) - ⭐️제언된 목표량을 입력해보세요", value=0.0)
+        input_vol = st.number_input("연간 판매량 (㎥) - ⭐️제언된 목표량을 입력해보세요", value=default_vol_m3)
         sim_vol = input_vol * 42.563  
         st.caption(f"ℹ️ 환산 열량: **{sim_vol:,.0f} MJ** (적용 열량: 42.563 MJ/㎥)")
     else:
-        sim_vol = st.number_input("연간 판매량 (MJ) - ⭐️제언된 목표량을 입력해보세요", value=0.0)
+        default_vol_mj = default_vol_m3 * 42.563
+        sim_vol = st.number_input("연간 판매량 (MJ) - ⭐️제언된 목표량을 입력해보세요", value=default_vol_mj)
         st.caption(f"ℹ️ 환산 부피: **{sim_vol / 42.563:,.0f} ㎥** (적용 열량: 42.563 MJ/㎥)")
     
     if group_sel == "복합용도":
@@ -292,7 +292,7 @@ if st.session_state.run_sim:
         if use_meter_estimator:
             req_vol_m3_30_est = res['required_vol_30'] / 42.563
             est_meter_grade = req_vol_m3_30_est / op_hours if op_hours > 0 else 0
-            meter_est_placeholder.success(f"✨ 30년 경제성 만족 최소 계량기: **{math.ceil(est_meter_grade)} 등급** 이상 필요")
+            meter_est_placeholder.info(f"✨ 30년 경제성 만족 최소 계량기: **{math.ceil(est_meter_grade)} 등급** 이상 필요")
             
         with result_top_container:
             st.divider()
