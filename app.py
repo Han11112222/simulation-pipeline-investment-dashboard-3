@@ -5,7 +5,7 @@ import numpy_financial as npf
 import math
 
 # [설정] 페이지 기본
-st.set_page_config(page_title="신규배관 경제성 분석 Simulation ver3", layout="wide")
+st.set_page_config(page_title="신규배관 경제성 분석 Simulation ver2", layout="wide")
 
 # [함수] 금융 계산 로직
 def manual_npv(rate, values):
@@ -118,7 +118,7 @@ gas_rates = {
 # --------------------------------------------------------------------------
 # [UI] 메인 화면 최상단 (가스 용도 선택)
 # --------------------------------------------------------------------------
-st.title("🏗️ 신규배관 경제성 분석 Simulation ver3")
+st.title("🏗️ 신규배관 경제성 분석 Simulation ver2")
 
 st.subheader("📌 가스 용도 및 요금 선택")
 st.markdown("분석할 가스 용도 그룹을 먼저 선택하신 후, 하단에서 세부 용도를 선택해 주세요.")
@@ -180,19 +180,57 @@ with col1:
     st.subheader("1. 투자 정보")
     sim_len = st.number_input("투자 길이 (m)", value=0.0, step=1.0)
     sim_inv = st.number_input("총 공사비 (원)", value=0, format="%d")
-    sim_contrib = st.number_input("시설 분담금 (원)", value=0, format="%d")
+    
+    # 시설 분담금 자동 계산 토글
+    use_meter_contrib = st.toggle("🔄 계량기 등급으로 시설 분담금 계산", value=False)
+    if use_meter_contrib:
+        meter_grade_input = st.number_input("계량기 등급 입력", value=0.0, step=1.0)
+        sim_contrib = int(meter_grade_input * 22730)
+        st.info(f"계산된 시설 분담금: **{sim_contrib:,.0f} 원** (등급 × 22,730원)")
+    else:
+        sim_contrib = st.number_input("시설 분담금 (원)", value=0, format="%d")
+        
     sim_other = st.number_input("기타 이익 (보조금, 원)", value=0, format="%d")
     sim_jeon = st.number_input("공급 전수 (전)", value=0, step=1)
+    
+    # [수정] 엑셀 데이터 추출 후 완벽 반영된 최소 계량기 등급 추정기
+    st.markdown("---")
+    use_meter_estimator = st.toggle("💡 최소 계량기 등급 추정", value=False)
+    if use_meter_estimator:
+        st.markdown("**[최소 계량기 추정기]**")
+        est_product = st.selectbox("상품 선택", ["난방", "냉난방", "일반"])
+        
+        # 엑셀 시트 분석 바탕으로 8가지 정확한 업종 카테고리로 세팅
+        est_usage = st.selectbox("용도 및 업종", ["업무빌딩", "교육시설", "판매시설", "의료기관", "종교시설", "목욕시설", "숙박시설", "영업용"])
+        
+        # 실제 엑셀 데이터 추출 값 맵핑 (목욕/숙박/영업용은 상품 무관 단일 연가동시간 적용)
+        op_hours_data = {
+            "난방": {
+                "업무빌딩": 240, "교육시설": 222, "판매시설": 298, "의료기관": 543, "종교시설": 230,
+                "목욕시설": 659, "숙박시설": 721, "영업용": 582
+            },
+            "냉난방": {
+                "업무빌딩": 520, "교육시설": 523, "판매시설": 536, "의료기관": 960, "종교시설": 390,
+                "목욕시설": 659, "숙박시설": 721, "영업용": 582
+            },
+            "일반": {
+                "업무빌딩": 411, "교육시설": 335, "판매시설": 441, "의료기관": 500, "종교시설": 136,
+                "목욕시설": 659, "숙박시설": 721, "영업용": 582
+            }
+        }
+        op_hours = op_hours_data[est_product][est_usage]
+        st.caption(f"ℹ️ 참고 연간 가동시간: **{op_hours} 시간**")
+        
+        meter_est_placeholder = st.empty()
 
 with col2:
     st.subheader("2. 수익 정보 (연간)")
     
-    # [수정포인트 1] 단위 환산 토글 추가 (기본값 True: m3 입력 활성화)
     use_m3 = st.toggle("🔄 단위 환산 (㎥ 입력 활성화)", value=True)
     
     if use_m3:
         input_vol = st.number_input("연간 판매량 (㎥) - ⭐️제언된 목표량을 입력해보세요", value=0.0)
-        sim_vol = input_vol * 42.563  # 입력받은 m3를 내부 계산용 MJ로 변환
+        sim_vol = input_vol * 42.563  
         st.caption(f"ℹ️ 환산 열량: **{sim_vol:,.0f} MJ** (적용 열량: 42.563 MJ/㎥)")
     else:
         sim_vol = st.number_input("연간 판매량 (MJ) - ⭐️제언된 목표량을 입력해보세요", value=0.0)
@@ -251,6 +289,11 @@ if st.session_state.run_sim:
                                    sim_jeon, sim_basic_rev, RATE, TAX, dep_period, active_period, c_maint, c_adm_jeon, c_adm_m,
                                    effective_sales_price, effective_purchase_price)
         
+        if use_meter_estimator:
+            req_vol_m3_30_est = res['required_vol_30'] / 42.563
+            est_meter_grade = req_vol_m3_30_est / op_hours if op_hours > 0 else 0
+            meter_est_placeholder.success(f"✨ 30년 경제성 만족 최소 계량기: **{math.ceil(est_meter_grade)} 등급** 이상 필요")
+            
         with result_top_container:
             st.divider()
             
@@ -317,7 +360,6 @@ if st.session_state.run_sim:
             else:
                 st.error(f"⚠️ 현재 분석 조건으로는 30년 및 50년 기준 모두 경제성이 부족합니다. (목표 IRR {rate_pct}%)")
                 
-            # [수정포인트 2] 제언 결과 창에서 ㎥를 메인(###)으로, MJ를 서브(≙)로 위치 변경
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1:
                 st.markdown("👉 **현재 입력 판매량**")
