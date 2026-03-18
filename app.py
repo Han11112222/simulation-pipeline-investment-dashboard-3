@@ -120,8 +120,13 @@ gas_rates = {
 # --------------------------------------------------------------------------
 st.title("🏗️ 신규배관 경제성 분석 Simulation ver3")
 
-st.subheader("📌 가스 용도 및 요금 선택")
-st.markdown("분석할 가스 용도 그룹을 먼저 선택하신 후, 하단에서 세부 용도를 선택해 주세요.")
+col_title, col_toggle = st.columns([0.7, 0.3])
+with col_title:
+    st.subheader("📌 가스 용도 및 요금 선택")
+    st.markdown("분석할 가스 용도 그룹을 먼저 선택하신 후, 하단에서 세부 용도를 선택해 주세요.")
+with col_toggle:
+    st.markdown("<br>", unsafe_allow_html=True) # 줄맞춤을 위한 빈 공간
+    net_zero_mode = st.toggle("🌱 Net Zero 기준 (2050년, 24년 분석)", value=False)
 
 group_sel = st.radio("■ 용도 그룹", ["가정용", "일반용", "기타", "복합용도"], horizontal=True)
 
@@ -149,8 +154,10 @@ with st.sidebar:
     rate_pct = st.number_input("할인율 (%)", value=6.15, step=0.01, format="%.2f")
     tax_pct = st.number_input("법인세율+주민세율 (%)", value=22.0, step=0.1, format="%.1f")
     
-    dep_period = st.number_input("감가상각 연수 (년)", value=30, step=1)
-    analysis_period = st.number_input("경제성 분석 연수 (년)", value=30, step=1)
+    # Net Zero 토글 활성화 여부에 따라 기본값 24년으로 세팅 및 잠금
+    default_period = 24 if net_zero_mode else 30
+    dep_period = st.number_input("감가상각 연수 (년)", value=default_period, step=1, disabled=net_zero_mode)
+    analysis_period = st.number_input("경제성 분석 연수 (년)", value=default_period, step=1, disabled=net_zero_mode)
     
     st.subheader("💰 비용 단가 (이전 기준값)")
     c_maint = st.number_input("유지비 (원/m)", value=8222, format="%d")
